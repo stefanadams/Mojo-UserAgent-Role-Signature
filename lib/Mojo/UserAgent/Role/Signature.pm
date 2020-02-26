@@ -28,14 +28,30 @@ sub add_signature {
     (grep { /$Name$/ } map { find_packages $_ } $self->namespaces->@*),
     (grep { /$Name$/ } map { find_modules $_ } $self->namespaces->@*),
   );
+  @classes or @classes = ('Mojo::UserAgent::Role::Signature::Base');
   for my $module ( @classes ) {
     my $e = load_class $module;
     warn qq{Loading "$module" failed: $e} and next if ref $e;
-    $module = $module->new($config || {});
-    $self->{$module->name || $name} = $module;
+    my $role = $module->new($config || {});
+    $name = $role->name || $name;
+    $self->{$name} = $role;
+    $self->transactor->add_generator($name => sub {
+      my ($t, $tx) = (shift, shift);
+
+      # Apply Signature
+      $self->apply_signature($name => $tx);
+
+      # Next Generator
+      if ( @_ > 1 ) {
+        my $cb = $t->generators->{shift()};
+        $t->$cb($tx, @_);
+      }
+
+      # Body
+      elsif ( @_ ) { $tx->req->body(shift) }
+    });
     last;
   }
-  @classes or $self->{$name} ||= Mojo::UserAgent::Role::Signature::Base->new;
   return $self;
 }
 
