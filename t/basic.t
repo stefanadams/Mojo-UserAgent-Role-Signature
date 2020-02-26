@@ -13,7 +13,7 @@ $ua = Mojo::UserAgent->with_roles('+Signature')->new;
 $ua->add_signature('Whatev');
 $ua->add_signature('Another');
 
-my $tx = $ua->build_tx(GET => '/abc');
+$tx = $ua->build_tx(GET => '/abc');
 is $tx->req->headers->header('X-Mojo-Signature'), undef, 'unsigned request';
 
 $tx = $ua->signature('whatev')->build_tx(GET => '/abc');

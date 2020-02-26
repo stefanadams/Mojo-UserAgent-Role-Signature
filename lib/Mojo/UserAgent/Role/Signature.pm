@@ -1,7 +1,7 @@
 package Mojo::UserAgent::Role::Signature;
 use Mojo::Base -role;
 
-use Mojo::Loader qw(find_modules load_class);
+use Mojo::Loader qw(find_modules find_packages load_class);
 use Mojo::Util qw(camelize decamelize);
 
 use Mojo::UserAgent::Role::Signature::Base;
@@ -24,20 +24,27 @@ sub add_signature {
   my ($self, $Name, $config) = @_;
   $self = $self->new unless ref $self;
   my $name = decamelize($Name);
-  for my $module ( grep { /$Name$/ } map { find_modules $_ } $self->namespaces->@* ) {
+  my @classes = (
+    (grep { /$Name$/ } map { find_packages $_ } $self->namespaces->@*),
+    (grep { /$Name$/ } map { find_modules $_ } $self->namespaces->@*),
+  );
+  for my $module ( @classes ) {
     my $e = load_class $module;
     warn qq{Loading "$module" failed: $e} and next if ref $e;
-    $self->{$name} = $module->new($config);
+    $module = $module->new($config || {});
+    $self->{$module->name || $name} = $module;
     last;
   }
-  $self->{$name} ||= Mojo::UserAgent::Role::Signature::Base->new;
+  @classes or $self->{$name} ||= Mojo::UserAgent::Role::Signature::Base->new;
   return $self;
 }
 
 sub apply_signature {
   my ($self, $name, $tx) = @_;
   return $tx if _is_signed($tx);
-  $tx->req->headers->add('X-Mojo-Signature' => camelize($name));
+  my ($Name) = reverse split /::/, ref $self->{$name};
+  $Name = camelize($name) if $Name eq 'Base';
+  $tx->req->headers->add('X-Mojo-Signature' => $Name);
   $self->{$name}->tx($tx)->sign_tx;
 }
 

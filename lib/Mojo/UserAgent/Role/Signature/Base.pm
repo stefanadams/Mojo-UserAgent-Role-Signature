@@ -3,6 +3,7 @@ use Mojo::Base -base;
 
 use Mojo::Transaction::HTTP;
 
+has 'name';
 has tx => sub { Mojo::Transaction::HTTP->new };
 
 sub sign_tx { shift->tx }
