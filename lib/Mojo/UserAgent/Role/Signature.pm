@@ -6,6 +6,7 @@ use Mojo::Util qw(camelize decamelize);
 
 use Mojo::UserAgent::Role::Signature::Base;
 
+has args => sub { {} };
 has namespaces => sub { [__PACKAGE__] };
 has 'signature';
 
@@ -13,11 +14,8 @@ around build_tx => sub {
   my ($orig, $self) = (shift, shift);
   my $tx = $orig->($self, @_);
   my $name = delete $self->{signature};
-  return $tx unless $name
-                 && $self->{$name}
-                 && ref $self->{$name}
-                 && $self->{$name}->can('sign_tx');
-  $self->apply_signature($name => $tx);
+  return $tx unless $name && $self->signatures($name);
+  $self->apply_signature($name => $tx, $self->args);
 };
 
 sub add_signature {
@@ -34,12 +32,13 @@ sub add_signature {
     warn qq{Loading "$module" failed: $e} and next if ref $e;
     my $role = $module->new($config || {});
     $name = $role->name || $name;
-    $self->{$name} = $role;
+    $self->signatures($name => $role);
     $self->transactor->add_generator($name => sub {
       my ($t, $tx) = (shift, shift);
 
       # Apply Signature
-      $self->apply_signature($name => $tx);
+      my $args = shift if ref $_[0];
+      $self->apply_signature($name => $tx, $args);
 
       # Next Generator
       if ( @_ > 1 ) {
@@ -52,17 +51,21 @@ sub add_signature {
     });
     last;
   }
-  return $self;
+  return $self->signatures($name);
 }
 
 sub apply_signature {
-  my ($self, $name, $tx) = @_;
+  my ($self, $name, $tx, $args) = @_;
   return $tx if _is_signed($tx);
-  my ($Name) = reverse split /::/, ref $self->{$name};
+  my ($Name) = reverse split /::/, ref $self->signatures($name);
   $Name = camelize($name) if $Name eq 'Base';
   $tx->req->headers->add('X-Mojo-Signature' => $Name);
-  $self->{$name}->tx($tx)->sign_tx;
+  $self->signatures($name)->tx($tx)
+                          ->tap(sub { $_[0]->cb->($_[0], $self) })
+                          ->sign_tx($args);
 }
+
+sub signatures { Mojo::Util::_stash(signatures => @_) }
 
 sub _is_signed { shift->req->headers->header('X-Mojo-Signature') }
 
