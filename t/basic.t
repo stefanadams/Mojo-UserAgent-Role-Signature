@@ -16,13 +16,13 @@ $ua->add_signature('Another');
 $tx = $ua->build_tx(GET => '/abc');
 is $tx->req->headers->header('X-Mojo-Signature'), undef, 'unsigned request';
 
-$tx = $ua->signature('whatev')->build_tx(GET => '/abc');
+$tx = $ua->build_tx(GET => '/abc' => whatev => {});
 is $tx->req->headers->header('X-Mojo-Signature'), 'Whatev', 'signed request';
 
 $tx = $ua->build_tx(GET => '/abc');
 is $tx->req->headers->header('X-Mojo-Signature'), undef, 'unsigned request';
 
-$tx = $ua->signature('another')->build_tx(GET => '/abc');
+$tx = $ua->build_tx(GET => '/abc' => another => {});
 is $tx->req->headers->header('X-Mojo-Signature'), 'Another', 'signed request';
 
 $tx = $ua->build_tx(GET => '/abc');

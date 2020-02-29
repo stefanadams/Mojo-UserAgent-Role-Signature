@@ -6,16 +6,12 @@ use Mojo::Util qw(camelize decamelize);
 
 use Mojo::UserAgent::Role::Signature::Base;
 
-has args => sub { {} };
 has namespaces => sub { [__PACKAGE__] };
 has 'signature';
 
 around build_tx => sub {
   my ($orig, $self) = (shift, shift);
-  my $tx = $orig->($self, @_);
-  my $name = delete $self->{signature};
-  return $tx unless $name && $self->signatures($name);
-  $self->apply_signature($name => $tx, $self->args);
+  $self->apply_signature(undef, $orig->($self, @_));
 };
 
 sub add_signature {
@@ -56,7 +52,9 @@ sub add_signature {
 
 sub apply_signature {
   my ($self, $name, $tx, $args) = @_;
+  $name ||= $self->signature or return $tx;
   return $tx if _is_signed($tx);
+  return $tx unless $self->signatures($name);
   my ($Name) = reverse split /::/, ref $self->signatures($name);
   $Name = camelize($name) if $Name eq 'Base';
   $tx->req->headers->add('X-Mojo-Signature' => $Name);
