@@ -14,6 +14,8 @@ has proxy => sub { Mojo::UserAgent::Proxy->new };
 has tx => sub { Mojo::Transaction::HTTP->new };
 has '_args';
 
+sub cleanup { shift->_args(undef) }
+
 sub set_header {
   my ($self, $header) = (shift, shift);
   return unless my $value = shift || $self->_args->{$header};
