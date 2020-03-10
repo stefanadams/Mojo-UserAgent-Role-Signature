@@ -12,7 +12,7 @@ has cb => sub { sub { shift } };
 has 'name';
 has proxy => sub { Mojo::UserAgent::Proxy->new };
 has tx => sub { Mojo::Transaction::HTTP->new };
-has _args => sub { {} };
+has '_args';
 
 sub set_header {
   my ($self, $header) = (shift, shift);
