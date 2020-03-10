@@ -60,7 +60,7 @@ sub apply_signature {
   $tx->req->headers->add('X-Mojo-Signature' => $Name);
   $sig->tx($tx)
       ->tap(sub { $_[0]->cb->($_[0], $self) })
-      ->sign_tx(ref $args eq 'HASH' ? $args : undef);
+      ->sign_tx($args);
 }
 
 sub signatures { Mojo::Util::_stash(signatures => @_) }
