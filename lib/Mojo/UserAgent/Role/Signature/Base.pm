@@ -14,6 +14,12 @@ has 'name';
 has proxy => sub { Mojo::UserAgent::Proxy->new };
 has tx => sub { Mojo::Transaction::HTTP->new };
 
+sub set_header {
+  my ($self, $header) = (shift, shift);
+  return unless my $value = shift || $self->args->{$header};
+  $self->tx->req->headers->$header($value);
+}
+
 sub sign_tx { shift->tx }
 
 sub use_proxy {
