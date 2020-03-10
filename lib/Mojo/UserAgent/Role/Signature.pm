@@ -54,13 +54,13 @@ sub apply_signature {
   my ($self, $name, $tx, $args) = @_;
   $name ||= $self->signature or return $tx;
   return $tx if _is_signed($tx);
-  return $tx unless $self->signatures($name);
-  my ($Name) = reverse split /::/, ref $self->signatures($name);
+  return $tx unless my $sig = $self->signatures($name);
+  my ($Name) = reverse split /::/, ref $sig;
   $Name = camelize($name) if $Name eq 'Base';
   $tx->req->headers->add('X-Mojo-Signature' => $Name);
-  $self->signatures($name)->tx($tx)
-                          ->tap(sub { $_[0]->cb->($_[0], $self) })
-                          ->sign_tx($args);
+  $sig->tx($tx)
+      ->tap(sub { $_[0]->cb->($_[0], $self) })
+      ->sign_tx($args);
 }
 
 sub signatures { Mojo::Util::_stash(signatures => @_) }
