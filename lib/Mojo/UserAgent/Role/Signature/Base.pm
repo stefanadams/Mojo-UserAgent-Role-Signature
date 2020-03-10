@@ -16,7 +16,7 @@ has _args => sub { {} };
 
 sub set_header {
   my ($self, $header) = (shift, shift);
-  return unless my $value = shift || $self->args->{$header};
+  return unless my $value = shift || $self->_args->{$header};
   $self->tx->req->headers->$header($value);
 }
 
