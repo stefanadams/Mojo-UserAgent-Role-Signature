@@ -26,7 +26,9 @@ sub sign_tx { shift->tx }
 
 sub use_proxy {
   my $self = shift;
+  return $self->tx unless $self->proxy;
   local $ENV{MOJO_PROXY} = 1;
+  local $ENV{NO_PROXY} = 'localhost,127.0.0.1';
   $self->proxy->prepare($self->tx);
   return $self->tx;
 }

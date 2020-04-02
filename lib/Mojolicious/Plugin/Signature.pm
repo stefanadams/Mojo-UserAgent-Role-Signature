@@ -10,7 +10,9 @@ sub register {
 
   $app->helper(sign => sub {
     my ($c, $service) = (shift, shift);
-    my $args = @_ > 1 ? \@_ : ref $_[0] ? $_[0] : \$_[0];
+    my $args = @_ > 1 ? \@_ : ref $_[0] ? $_[0] : $_[0] ? \$_[0] : {};
+    $args = {%$args, $c->stash($service)->%*}
+      if ref $args eq 'HASH' && ref $c->stash($service) eq 'HASH';
     return ($service => $args);
   });
 }

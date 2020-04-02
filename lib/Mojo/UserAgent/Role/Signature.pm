@@ -44,6 +44,8 @@ sub add_signature {
 
       # Body
       elsif ( @_ ) { $tx->req->body(shift) }
+
+      return $tx;
     });
     last;
   }
