@@ -1,71 +1,44 @@
 package Mojo::UserAgent::Role::Signature;
 use Mojo::Base -role;
 
-use Mojo::Loader qw(find_modules find_packages load_class);
-use Mojo::Util qw(camelize decamelize);
+use Mojo::Loader qw(load_class);
+use Mojo::Util qw(camelize);
+use Mojo::UserAgent::Signature::Base;
 
-use Mojo::UserAgent::Role::Signature::Base;
-
-has namespaces => sub { [__PACKAGE__] };
+has namespaces => sub { ['Mojo::UserAgent::Signature'] };
 has 'signature';
 
 around build_tx => sub {
   my ($orig, $self) = (shift, shift);
-  $self->apply_signature($orig->($self, @_));
+  return $orig->($self, @_) unless $self->signature;
+  $self->signature->apply_signature($orig->($self, @_));
 };
 
-sub add_signature {
-  my ($self, $name, $config) = @_;
-  $self = $self->new unless ref $self;
-  my @classes = (
-    (grep { /$name$/ } map { find_packages $_ } $self->namespaces->@*),
-    (grep { /$name$/ } map { find_modules $_ } $self->namespaces->@*),
-  );
-  @classes or @classes = ('Mojo::UserAgent::Role::Signature::Base');
-  for my $module ( @classes ) {
-    my $e = load_class $module;
-    warn qq{Loading "$module" failed: $e} and next if ref $e;
-    $self->signature($module->new($config || {}));
-    last;
-  }
-  return $self->add_signature_generator;
+sub load_signature {
+  my ($self, $name) = @_;
+
+  # Try all namespaces and full module name
+  my $suffix  = $name =~ /^[a-z]/ ? camelize $name : $name;
+  my @classes = map {"${_}::$suffix"} @{$self->namespaces};
+  for my $class (@classes, $name) { return $class->new if _load($class) }
+  my $class = __PACKAGE__ . "::None";
+  return $class->new if _load($class);
+
+  # Not found
+  die qq{Signature "$name" missing, maybe you need to install it?\n};
 }
 
-sub add_signature_generator {
+sub initialize_signature {
   my $self = shift;
-  $self->transactor->add_generator(sign => sub {
-    my ($t, $tx) = (shift, shift);
-
-    # Apply Signature
-    my $args = shift if ref $_[0];
-    $self->apply_signature($tx, $args);
-
-    # Next Generator
-    if ( @_ > 1 ) {
-      my $cb = $t->generators->{shift()};
-      $t->$cb($tx, @_);
-    }
-
-    # Body
-    elsif ( @_ ) { $tx->req->body(shift) }
-
-    return $tx;
-  });
-  return $self;
+  $self->load_signature(shift)->init($self, ref $_[0] ? $_[0] : {@_});
 }
 
-sub apply_signature {
-  my ($self, $tx, $args) = @_;
-  return $tx if _is_signed($tx);
-  return $tx unless my $sig = $self->signature;
-  my ($name) = reverse split /::/, ref $sig;
-  $tx->req->headers->add('X-Mojo-Signature' => $name || 'Yes');
-  $sig->tx($tx)
-      ->tap(sub { $_[0]->cb->($_[0], $self) })
-      ->sign_tx($args);
+sub _load {
+  my $module = shift;
+  return $module->isa('Mojo::UserAgent::Signature::Base')
+    unless my $e = load_class $module;
+  ref $e ? die $e : return undef;
 }
-
-sub _is_signed { shift->req->headers->header('X-Mojo-Signature') }
 
 1;
 
