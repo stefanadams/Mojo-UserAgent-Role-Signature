@@ -31,7 +31,7 @@ WriteMakefile(
   PREREQ_PM => {
     'Mojolicious' => '8.35',
     'Role::Tiny'  => '2.000001',
-    'Class::Method::Modifiers',
+    'Class::Method::Modifiers' => '2.12',
   },
   test      => {TESTS => 't/*.t'}
 );
