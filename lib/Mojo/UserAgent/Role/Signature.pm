@@ -5,7 +5,9 @@ use Mojo::Loader qw(load_class);
 use Mojo::Util qw(camelize);
 use Mojo::UserAgent::Signature::Base;
 
-has namespaces => sub { ['Mojo::UserAgent::Signature'] };
+our $VERSION = '0.01';
+
+has signature_namespaces => sub { ['Mojo::UserAgent::Signature'] };
 has 'signature';
 
 around build_tx => sub {
@@ -14,23 +16,19 @@ around build_tx => sub {
   $self->signature->apply_signature($orig->($self, @_));
 };
 
+sub initialize_signature {
+  my $self = shift;
+  $self->load_signature(shift)->init($self, ref $_[0] ? $_[0] : {@_});
+}
+
 sub load_signature {
   my ($self, $name) = @_;
 
   # Try all namespaces and full module name
   my $suffix  = $name =~ /^[a-z]/ ? camelize $name : $name;
-  my @classes = map {"${_}::$suffix"} @{$self->namespaces};
+  my @classes = map {"${_}::$suffix"} @{$self->signature_namespaces};
   for my $class (@classes, $name) { return $class->new if _load($class) }
-  my $class = __PACKAGE__ . "::None";
-  return $class->new if _load($class);
-
-  # Not found
-  die qq{Signature "$name" missing, maybe you need to install it?\n};
-}
-
-sub initialize_signature {
-  my $self = shift;
-  $self->load_signature(shift)->init($self, ref $_[0] ? $_[0] : {@_});
+  return Mojo::UserAgent::Signature::None->new;
 }
 
 sub _load {
@@ -46,79 +44,89 @@ sub _load {
 
 =head1 NAME
 
-Mojo::UserAgent::Role::Signature - Automatically sign request transactions
+Mojo::UserAgent::Role::Signature - Role for Mojo::UserAgent that automatically
+signs request transactions
 
 =head1 SYNOPSIS
 
   use Mojo::UserAgent;
 
   my $ua = Mojo::UserAgent->with_roles('+Signature')->new;
-  $ua->add_signature(SomeService => {%args});
+  $ua->initialize_signature(SomeService => {%args});
   my $tx = $ua->get('/api/for/some/service');
   say $tx->req->headers->authorization;
 
 =head1 DESCRIPTION
 
-L<Mojo::UserAgent::Role::Signature> modifies the L<Mojo::UserAgent/"build_tx">
-method by wrapping around it with a L<role|Role::Tiny> and signing the
-transaction using signature added to the UserAgent object.
+L<Mojo::UserAgent::Role::Signature> is a role for the full featured non-blocking
+I/O HTTP and WebSocket user agent L<Mojo::UserAgent>, that automatically signs
+request transactions.
+
+This module modifies the L<Mojo::UserAgent> by wrapping L<Role::Tiny/"around">
+the L<Mojo::UserAgent/"build_tx"> method with L</"apply_signature"> signing the
+final built transaction using the object instance set in the L</"signature">
+attribute that is this module adds to the L<Mojo::UserAgent> class.
 
 =head1 ATTRIBUTES
-
-=head2 namespaces
-
-  $namespaces = $ua->namespaces;
-  $ua         = $ua->namespaces([]);
-
-Set the namespaces to search for the module specified in add_signature.
-Defaults to C<Mojo::UserAgent::Role::Siganture>.
 
 =head2 signature
 
   $signature = $ua->signature;
   $ua        = $ua->signature(SomeService->new);
 
-If this attribute is not defined, the method modifier provider by this
-L<role|Role::Tiny> will have no effect.
+If this attribute is not defined, the method modifier provided by this
+L<role|Role::Tiny> will have no effect on the transaction being built
+by L<Mojo::UserAgent>.
+
+=head2 signature_namespaces
+
+  $namespaces = $ua->signature_namespaces;
+  $ua         = $ua->signature_namespaces(['Mojo::UserAgent::Signature']);
+
+Namespaces to load signature from, defaults to C<Mojo::UserAgent::Signature>.
+
+  # Add another namespace to load signature from
+  push @{$ua->namespaces}, 'MyApp::Signature';
 
 =head1 METHODS
 
-=head2 add_signature
+L<Mojo::UserAgent::Role::Signature> inherits all methods from L<Mojo::Base> and
+implements the following new ones.
 
-  $ua = $ua->add_signature(SomeService => {%args});
+=head2 initialize_signature
 
-Add the signature handling module to the UserAgent instance. The
-specified module will searched by looking in the namespaces.
+  $ua->initialize_signature('some_service');
+  $ua->initialize_signature('some_service', foo => 23);
+  $ua->initialize_signature('some_service', {foo => 23});
+  $ua->initialize_signature('SomeService');
+  $ua->initialize_signature('SomeService', foo => 23);
+  $ua->initialize_signature('SomeService', {foo => 23});
+  $ua->initialize_signature('MyApp::Signature::SomeService');
+  $ua->initialize_signature('MyApp::Signature::SomeService', foo => 23);
+  $ua->initialize_signature('MyApp::Signature::SomeService', {foo => 23});
 
-=head2 add_signature_generator
+Load a signature from the configured namespaces or by full module name and run
+init, optional arguments are passed through.
 
-  $ua = $ua->add_signature_generator;
+=head2 load_signature
 
-Adds a transactor generator named C<sign> for applying a signature
-to a transaction. Useful for overriding the signature details added
-to the instance by add_signature.
+  my $signature = $ua->load_signature('some_service');
+  my $signature = $ua->load_signature('SomeService');
+  my $signature = $ua->load_signature('MyApp::Signature::SomeService');
 
-  $ua->get($url => sign => {%args});
-
-=head2 apply_signature
-
-  $signed_tx = $ua->apply_signature($tx, $args);
-
-Adds the signature produced by the C<sign_tx> method of the
-SomeService module. Also adds a header to the transaction,
-C<X-Mojo-Signature>, to indicate that this transaction has been
-signed -- this prevents the automatic signature handling from
-applying the signature a second time after the generator.
+Load a signature from the configured namespaces or by full module name. Will
+fallback to L<Mojo::UserAgent::Signature::None> if the specified signature
+cannot be loaded.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2019, Stefan Adams and others.
+Copyright (C) 2020, Stefan Adams.
 
 This program is free software, you can redistribute it and/or modify it under
 the terms of the Artistic License version 2.0.
 
 =head1 SEE ALSO
 
-L<https://github.com/s1037989/mojo-aws-signature4>, L<Mojo::UserAgent>.
+L<https://github.com/stefanadams/mojo-useragent-role-signature>, L<Mojo::UserAgent>.
 
 =cut
